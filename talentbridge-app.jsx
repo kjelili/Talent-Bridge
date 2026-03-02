@@ -1,0 +1,1235 @@
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+
+// ============================================================================
+// DATA STORE (In-memory database simulation)
+// ============================================================================
+const generateId = () => Math.random().toString(36).substr(2, 9);
+
+const INITIAL_SKILLS = [
+  "React", "Node.js", "Python", "TypeScript", "AWS", "Docker", "Kubernetes",
+  "Figma", "UI/UX Design", "Machine Learning", "TensorFlow", "SQL", "MongoDB",
+  "SEO", "Content Marketing", "React Native", "Flutter", "Swift", "GraphQL",
+  "Terraform", "Go", "Rust", "Vue.js", "Angular", "PostgreSQL", "Redis",
+  "DevOps", "CI/CD", "Microservices", "System Design", "Blockchain", "Web3"
+];
+
+const CATEGORIES = [
+  "Web Development", "Mobile Development", "Design", "Data Science",
+  "DevOps", "Marketing", "Writing", "Blockchain", "AI/ML", "Other"
+];
+
+const SEED_FREELANCERS = [
+  { id: "f1", name: "Sarah Chen", email: "sarah@example.com", title: "Full Stack Developer", location: "San Francisco, CA", hourlyRate: 75, rating: 4.9, reviewCount: 47, skills: ["React", "Node.js", "AWS", "Python", "TypeScript"], bio: "Experienced full stack developer with 8+ years building scalable web applications. Specialized in React ecosystems and cloud architecture.", status: "available", avatar: "SC" },
+  { id: "f2", name: "John Martinez", email: "john@example.com", title: "Cloud Infrastructure Specialist", location: "Austin, TX", hourlyRate: 90, rating: 4.8, reviewCount: 32, skills: ["AWS", "Docker", "Kubernetes", "Terraform", "DevOps"], bio: "Cloud architect helping companies scale efficiently with modern infrastructure.", status: "busy", avatar: "JM" },
+  { id: "f3", name: "Emily Johnson", email: "emily@example.com", title: "UI/UX Designer", location: "New York, NY", hourlyRate: 65, rating: 4.7, reviewCount: 28, skills: ["Figma", "UI/UX Design", "React", "CSS"], bio: "Creative designer focused on user-centered design and modern interfaces.", status: "available", avatar: "EJ" },
+  { id: "f4", name: "Michael Brown", email: "michael@example.com", title: "Data Scientist", location: "Seattle, WA", hourlyRate: 85, rating: 4.9, reviewCount: 41, skills: ["Python", "Machine Learning", "TensorFlow", "SQL"], bio: "Data scientist turning complex data into actionable business insights.", status: "available", avatar: "MB" },
+  { id: "f5", name: "Lisa Wang", email: "lisa@example.com", title: "Digital Marketing Expert", location: "Los Angeles, CA", hourlyRate: 55, rating: 4.6, reviewCount: 35, skills: ["SEO", "Content Marketing", "Google Ads"], bio: "Marketing expert helping businesses grow through digital channels.", status: "available", avatar: "LW" },
+  { id: "f6", name: "David Kim", email: "david@example.com", title: "Mobile App Developer", location: "Boston, MA", hourlyRate: 70, rating: 4.8, reviewCount: 39, skills: ["React Native", "Flutter", "Swift", "TypeScript"], bio: "Mobile developer building polished cross-platform apps.", status: "available", avatar: "DK" },
+];
+
+const SEED_JOBS = [
+  { id: "j1", clientId: "c1", clientName: "TechCorp Inc.", title: "Full Stack Developer for E-commerce Platform", description: "We need an experienced full stack developer to build a modern e-commerce platform with React frontend and Node.js backend. Must have experience with payment integrations and cloud deployment.", skills: ["React", "Node.js", "AWS", "MongoDB"], budgetMin: 5000, budgetMax: 8000, budgetType: "fixed", category: "Web Development", location: "Remote", status: "open", createdAt: Date.now() - 86400000 * 3, deadline: Date.now() + 86400000 * 45, bids: [], teamSize: 1 },
+  { id: "j2", clientId: "c2", clientName: "Startup.io", title: "UI/UX Designer for Fitness App", description: "Looking for a talented designer to create stunning designs for our fitness tracking mobile app. Need wireframes, prototypes, and final designs in Figma.", skills: ["Figma", "UI/UX Design"], budgetMin: 2500, budgetMax: 4000, budgetType: "fixed", category: "Design", location: "Remote", status: "open", createdAt: Date.now() - 86400000 * 1, deadline: Date.now() + 86400000 * 30, bids: [], teamSize: 1 },
+  { id: "j3", clientId: "c1", clientName: "TechCorp Inc.", title: "Cloud Migration & DevOps Team", description: "Major cloud migration project. Need a team of 3-4 specialists to migrate our legacy infrastructure to AWS with CI/CD pipeline, auto-scaling, and cost optimization.", skills: ["AWS", "Docker", "Kubernetes", "Terraform", "DevOps"], budgetMin: 15000, budgetMax: 25000, budgetType: "fixed", category: "DevOps", location: "Remote", status: "open", createdAt: Date.now() - 86400000 * 5, deadline: Date.now() + 86400000 * 60, bids: [], teamSize: 4 },
+  { id: "j4", clientId: "c3", clientName: "DataDriven Co.", title: "ML Model for Customer Churn Prediction", description: "Build a machine learning model to predict customer churn. Includes data analysis, feature engineering, model training, evaluation, and deployment.", skills: ["Python", "Machine Learning", "TensorFlow", "SQL"], budgetMin: 3000, budgetMax: 5000, budgetType: "fixed", category: "AI/ML", location: "Remote", status: "open", createdAt: Date.now() - 86400000 * 2, deadline: Date.now() + 86400000 * 40, bids: [], teamSize: 2 },
+];
+
+const SEED_PROJECTS = [
+  { id: "p1", clientId: "c1", clientName: "TechCorp Inc.", title: "Enterprise Dashboard Rebuild", description: "Complete redesign and rebuild of our internal analytics dashboard.", status: "active", members: ["f1", "f3"], budget: 20000, category: "Web Development", createdAt: Date.now() - 86400000 * 15 },
+];
+
+// ============================================================================
+// ICONS (inline SVG components)
+// ============================================================================
+const Icons = {
+  Search: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>,
+  Star: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
+  MapPin: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
+  Clock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  Users: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  Briefcase: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>,
+  Plus: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  Check: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>,
+  X: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  ArrowRight: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+  Home: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+  Grid: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+  Folder: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>,
+  User: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  LogOut: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  DollarSign: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+  Send: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
+  Settings: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.73 12.73 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>,
+  ChevronDown: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>,
+  Zap: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  Shield: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  Globe: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+};
+
+// ============================================================================
+// STYLES
+// ============================================================================
+const css = `
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  --brand-50: #eef7ff;
+  --brand-100: #d9edff;
+  --brand-200: #bce0ff;
+  --brand-300: #8eccff;
+  --brand-400: #59afff;
+  --brand-500: #338bff;
+  --brand-600: #1a6af5;
+  --brand-700: #1354e1;
+  --brand-800: #1644b6;
+  --brand-900: #183c8f;
+  --brand-950: #132657;
+  
+  --accent: #ff6b35;
+  --accent-light: #fff0ea;
+  --success: #10b981;
+  --success-light: #ecfdf5;
+  --warning: #f59e0b;
+  --warning-light: #fffbeb;
+  --error: #ef4444;
+  --error-light: #fef2f2;
+  
+  --gray-25: #fcfcfd;
+  --gray-50: #f9fafb;
+  --gray-100: #f2f4f7;
+  --gray-200: #eaecf0;
+  --gray-300: #d0d5dd;
+  --gray-400: #98a2b3;
+  --gray-500: #667085;
+  --gray-600: #475467;
+  --gray-700: #344054;
+  --gray-800: #1d2939;
+  --gray-900: #101828;
+  
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+  
+  --shadow-xs: 0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm: 0 1px 3px rgba(16,24,40,.1), 0 1px 2px rgba(16,24,40,.06);
+  --shadow-md: 0 4px 8px -2px rgba(16,24,40,.1), 0 2px 4px -2px rgba(16,24,40,.06);
+  --shadow-lg: 0 12px 16px -4px rgba(16,24,40,.08), 0 4px 6px -2px rgba(16,24,40,.03);
+  --shadow-xl: 0 20px 24px -4px rgba(16,24,40,.08), 0 8px 8px -4px rgba(16,24,40,.03);
+  
+  --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { font-family: var(--font-sans); color: var(--gray-700); background: var(--gray-25); -webkit-font-smoothing: antialiased; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
+
+/* Animations */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+.fade-up { animation: fadeUp .5s ease both; }
+.fade-in { animation: fadeIn .4s ease both; }
+
+/* Toast notifications */
+.toast-container { position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; }
+.toast { padding: 12px 20px; border-radius: var(--radius-lg); font-size: 14px; font-weight: 500; box-shadow: var(--shadow-lg); animation: slideIn .3s ease; max-width: 360px; display: flex; align-items: center; gap: 8px; }
+.toast-success { background: var(--success); color: white; }
+.toast-error { background: var(--error); color: white; }
+.toast-info { background: var(--brand-600); color: white; }
+`;
+
+// ============================================================================
+// APP COMPONENT
+// ============================================================================
+export default function TalentBridgeApp() {
+  // Global state
+  const [currentUser, setCurrentUser] = useState(null);
+  const [page, setPage] = useState("landing");
+  const [freelancers, setFreelancers] = useState(SEED_FREELANCERS);
+  const [jobs, setJobs] = useState(SEED_JOBS);
+  const [projects, setProjects] = useState(SEED_PROJECTS);
+  const [users, setUsers] = useState([
+    { id: "c1", email: "alex@techcorp.com", password: "Password123", name: "Alex Thompson", role: "client", company: "TechCorp Inc." },
+    { id: "c2", email: "maria@startup.io", password: "Password123", name: "Maria Garcia", role: "client", company: "Startup.io" },
+    { id: "c3", email: "robert@datadriven.com", password: "Password123", name: "Robert Wilson", role: "client", company: "DataDriven Co." },
+    ...SEED_FREELANCERS.map(f => ({ id: f.id, email: f.email, password: "Password123", name: f.name, role: "freelancer" })),
+  ]);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = useCallback((message, type = "info") => {
+    const id = generateId();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
+  }, []);
+
+  const navigate = useCallback((p) => {
+    setPage(p);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleLogin = useCallback((email, password) => {
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+    if (user) {
+      setCurrentUser(user);
+      addToast(`Welcome back, ${user.name}!`, "success");
+      navigate(user.role === "freelancer" ? "dashboard" : "jobs");
+      return true;
+    }
+    addToast("Invalid email or password", "error");
+    return false;
+  }, [users, addToast, navigate]);
+
+  const handleRegister = useCallback((data) => {
+    if (users.find(u => u.email.toLowerCase() === data.email.toLowerCase())) {
+      addToast("Email already registered", "error");
+      return false;
+    }
+    const newUser = { id: generateId(), ...data };
+    setUsers(prev => [...prev, newUser]);
+
+    if (data.role === "freelancer") {
+      const newFreelancer = {
+        id: newUser.id, name: data.name, email: data.email, title: data.title || "Freelancer",
+        location: data.location || "", hourlyRate: data.hourlyRate || 50, rating: 0, reviewCount: 0,
+        skills: data.skills || [], bio: data.bio || "", status: "available",
+        avatar: data.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+      };
+      setFreelancers(prev => [...prev, newFreelancer]);
+    }
+
+    setCurrentUser(newUser);
+    addToast("Account created! Welcome to TalentBridge.", "success");
+    navigate(data.role === "freelancer" ? "dashboard" : "jobs");
+    return true;
+  }, [users, addToast, navigate]);
+
+  const handleLogout = useCallback(() => {
+    setCurrentUser(null);
+    navigate("landing");
+    addToast("Logged out successfully", "info");
+  }, [addToast, navigate]);
+
+  const handleBid = useCallback((jobId, bidData) => {
+    setJobs(prev => prev.map(j =>
+      j.id === jobId
+        ? { ...j, bids: [...j.bids, { id: generateId(), freelancerId: currentUser.id, freelancerName: currentUser.name, ...bidData, createdAt: Date.now() }] }
+        : j
+    ));
+    addToast("Bid submitted successfully!", "success");
+  }, [currentUser, addToast]);
+
+  const handlePostJob = useCallback((jobData) => {
+    const newJob = {
+      id: generateId(), clientId: currentUser.id, clientName: currentUser.company || currentUser.name,
+      ...jobData, status: "open", createdAt: Date.now(), bids: []
+    };
+    setJobs(prev => [newJob, ...prev]);
+    addToast("Job posted successfully!", "success");
+    navigate("jobs");
+  }, [currentUser, addToast, navigate]);
+
+  const handleCreateProject = useCallback((projectData) => {
+    const newProject = {
+      id: generateId(), clientId: currentUser.id, clientName: currentUser.company || currentUser.name,
+      ...projectData, status: "active", createdAt: Date.now()
+    };
+    setProjects(prev => [newProject, ...prev]);
+    addToast("Project created!", "success");
+    navigate("projects");
+  }, [currentUser, addToast, navigate]);
+
+  // Get freelancer profile for current user
+  const currentFreelancer = useMemo(() =>
+    currentUser?.role === "freelancer" ? freelancers.find(f => f.id === currentUser.id) : null,
+    [currentUser, freelancers]
+  );
+
+  return (
+    <>
+      <style>{css}</style>
+      {/* Toast notifications */}
+      <div className="toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className={`toast toast-${t.type}`}>
+            {t.type === "success" && <Icons.Check />}
+            {t.type === "error" && <Icons.X />}
+            {t.message}
+          </div>
+        ))}
+      </div>
+
+      {/* Navigation */}
+      {page !== "landing" && page !== "login" && page !== "register" && (
+        <Navbar currentUser={currentUser} onNavigate={navigate} onLogout={handleLogout} page={page} />
+      )}
+
+      {/* Pages */}
+      {page === "landing" && <LandingPage onNavigate={navigate} />}
+      {page === "login" && <LoginPage onLogin={handleLogin} onNavigate={navigate} />}
+      {page === "register" && <RegisterPage onRegister={handleRegister} onNavigate={navigate} />}
+      {page === "dashboard" && <DashboardPage freelancer={currentFreelancer} jobs={jobs} projects={projects} onNavigate={navigate} />}
+      {page === "freelancers" && <FreelancersPage freelancers={freelancers} onNavigate={navigate} />}
+      {page === "jobs" && <JobsPage jobs={jobs} currentUser={currentUser} onBid={handleBid} onNavigate={navigate} freelancers={freelancers} />}
+      {page === "post-job" && <PostJobPage onPost={handlePostJob} onNavigate={navigate} />}
+      {page === "projects" && <ProjectsPage projects={projects} freelancers={freelancers} currentUser={currentUser} onCreate={handleCreateProject} onNavigate={navigate} />}
+      {page === "about" && <AboutPage onNavigate={navigate} />}
+    </>
+  );
+}
+
+// ============================================================================
+// NAVBAR
+// ============================================================================
+function Navbar({ currentUser, onNavigate, onLogout, page }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const isFreelancer = currentUser?.role === "freelancer";
+
+  return (
+    <nav style={{
+      position: "sticky", top: 0, zIndex: 100, background: "rgba(255,255,255,.92)",
+      backdropFilter: "blur(12px)", borderBottom: "1px solid var(--gray-200)",
+      padding: "0 24px", height: 64, display: "flex", alignItems: "center"
+    }}>
+      <div style={{ maxWidth: 1200, width: "100%", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <button onClick={() => onNavigate("landing")} style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", cursor: "pointer" }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: var_radius_lg,
+            background: "linear-gradient(135deg, var(--brand-600), var(--brand-400))",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "white", fontWeight: 700, fontSize: 13, fontFamily: "var(--font-mono)"
+          }}>TB</div>
+          <span style={{ fontWeight: 700, fontSize: 18, color: "var(--gray-900)", letterSpacing: "-.01em" }}>TalentBridge</span>
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {[
+            { label: "Find Talent", page: "freelancers" },
+            { label: "Browse Jobs", page: "jobs" },
+            { label: "Projects", page: "projects" },
+            { label: "About", page: "about" },
+          ].map(item => (
+            <button key={item.page} onClick={() => onNavigate(item.page)}
+              style={{
+                padding: "8px 14px", borderRadius: var_radius_md, border: "none", cursor: "pointer",
+                fontSize: 14, fontWeight: 500, fontFamily: "var(--font-sans)",
+                background: page === item.page ? "var(--brand-50)" : "transparent",
+                color: page === item.page ? "var(--brand-700)" : "var(--gray-600)",
+                transition: "all .15s"
+              }}>{item.label}</button>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {currentUser ? (
+            <>
+              {!isFreelancer && (
+                <button onClick={() => onNavigate("post-job")} style={{ ...btnStyle, ...btnPrimary, padding: "8px 16px", fontSize: 13 }}>
+                  <Icons.Plus /> Post Job
+                </button>
+              )}
+              {isFreelancer && (
+                <button onClick={() => onNavigate("dashboard")} style={{ ...btnStyle, ...btnSecondary, padding: "8px 16px", fontSize: 13 }}>
+                  Dashboard
+                </button>
+              )}
+              <div style={{ position: "relative" }}>
+                <button onClick={() => setMenuOpen(!menuOpen)} style={{
+                  width: 36, height: 36, borderRadius: "50%", border: "2px solid var(--brand-200)",
+                  background: "linear-gradient(135deg, var(--brand-500), var(--accent))",
+                  color: "white", fontWeight: 600, fontSize: 12, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center"
+                }}>{currentUser.name?.split(" ").map(n => n[0]).join("")}</button>
+                {menuOpen && (
+                  <div style={{
+                    position: "absolute", top: 44, right: 0, width: 200, background: "white",
+                    borderRadius: var_radius_lg, boxShadow: "var(--shadow-xl)", border: "1px solid var(--gray-200)",
+                    overflow: "hidden", zIndex: 1000
+                  }}>
+                    <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--gray-100)", fontSize: 13, color: "var(--gray-500)" }}>
+                      {currentUser.email}
+                    </div>
+                    <button onClick={() => { setMenuOpen(false); onLogout(); }} style={{
+                      width: "100%", padding: "10px 16px", border: "none", background: "none",
+                      cursor: "pointer", textAlign: "left", fontSize: 14, color: "var(--gray-700)",
+                      display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-sans)"
+                    }}><Icons.LogOut /> Sign Out</button>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <button onClick={() => onNavigate("login")} style={{ ...btnStyle, ...btnSecondary, padding: "8px 18px", fontSize: 13 }}>Sign In</button>
+              <button onClick={() => onNavigate("register")} style={{ ...btnStyle, ...btnPrimary, padding: "8px 18px", fontSize: 13 }}>Join Free</button>
+            </>
+          )}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+// Constants for consistent styling
+const var_radius_sm = "6px";
+const var_radius_md = "8px";
+const var_radius_lg = "12px";
+const var_radius_xl = "16px";
+
+const btnStyle = {
+  display: "inline-flex", alignItems: "center", gap: 6, border: "none", cursor: "pointer",
+  fontFamily: "var(--font-sans)", fontWeight: 600, borderRadius: var_radius_md, transition: "all .2s",
+  textDecoration: "none", whiteSpace: "nowrap"
+};
+const btnPrimary = {
+  background: "linear-gradient(135deg, var(--brand-600), var(--brand-500))",
+  color: "white", boxShadow: "0 1px 3px rgba(26,106,245,.3)", padding: "10px 20px", fontSize: 14
+};
+const btnSecondary = {
+  background: "white", color: "var(--gray-700)", border: "1px solid var(--gray-300)",
+  padding: "10px 20px", fontSize: 14
+};
+const btnAccent = {
+  background: "linear-gradient(135deg, var(--accent), #ff8a5c)",
+  color: "white", boxShadow: "0 1px 3px rgba(255,107,53,.3)", padding: "10px 20px", fontSize: 14
+};
+
+const inputStyle = {
+  width: "100%", padding: "10px 14px", borderRadius: var_radius_md,
+  border: "1.5px solid var(--gray-200)", fontSize: 14, fontFamily: "var(--font-sans)",
+  color: "var(--gray-900)", background: "white", outline: "none", transition: "border .2s"
+};
+
+const cardStyle = {
+  background: "white", borderRadius: var_radius_xl, border: "1px solid var(--gray-200)",
+  padding: 24, transition: "all .2s"
+};
+
+// ============================================================================
+// LANDING PAGE
+// ============================================================================
+function LandingPage({ onNavigate }) {
+  return (
+    <div>
+      {/* Hero */}
+      <section style={{
+        position: "relative", overflow: "hidden",
+        background: "linear-gradient(160deg, var(--gray-900) 0%, var(--brand-950) 50%, var(--brand-900) 100%)",
+        padding: "0 24px", minHeight: "90vh", display: "flex", alignItems: "center"
+      }}>
+        {/* Decorative elements */}
+        <div style={{ position: "absolute", top: -200, right: -200, width: 600, height: 600, borderRadius: "50%", background: "radial-gradient(circle, rgba(51,139,255,.15), transparent)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", bottom: -100, left: -100, width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,107,53,.1), transparent)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: 60, left: 40, width: 4, height: 4, borderRadius: "50%", background: "var(--brand-400)", animation: "float 3s ease infinite" }} />
+        <div style={{ position: "absolute", top: 120, right: 120, width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", animation: "float 4s ease infinite .5s" }} />
+        <div style={{ position: "absolute", bottom: 180, left: 200, width: 3, height: 3, borderRadius: "50%", background: "var(--brand-300)", animation: "float 3.5s ease infinite 1s" }} />
+
+        {/* Top nav on landing */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, padding: "20px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", zIndex: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 38, height: 38, borderRadius: var_radius_lg, background: "linear-gradient(135deg, var(--brand-500), var(--brand-400))", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 14, fontFamily: "var(--font-mono)" }}>TB</div>
+            <span style={{ fontWeight: 700, fontSize: 19, color: "white", letterSpacing: "-.01em" }}>TalentBridge</span>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => onNavigate("login")} style={{ ...btnStyle, background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.9)", border: "1px solid rgba(255,255,255,.15)", padding: "9px 20px", fontSize: 13, backdropFilter: "blur(4px)" }}>Sign In</button>
+            <button onClick={() => onNavigate("register")} style={{ ...btnStyle, ...btnPrimary, padding: "9px 20px", fontSize: 13 }}>Get Started Free</button>
+          </div>
+        </div>
+
+        <div style={{ maxWidth: 1200, width: "100%", margin: "0 auto", textAlign: "center", position: "relative", zIndex: 1 }}>
+          <div className="fade-up" style={{ animationDelay: ".1s" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 16px", borderRadius: var_radius_full, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.12)", marginBottom: 28, backdropFilter: "blur(4px)" }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--success)" }} />
+              <span style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,.8)", letterSpacing: ".02em" }}>Platform connecting talent worldwide</span>
+            </div>
+          </div>
+          <h1 className="fade-up" style={{ animationDelay: ".2s", fontSize: "clamp(40px, 6vw, 72px)", fontWeight: 800, color: "white", lineHeight: 1.08, letterSpacing: "-.03em", marginBottom: 24, maxWidth: 800, margin: "0 auto 24px" }}>
+            Build Your Dream<br />
+            <span style={{ background: "linear-gradient(135deg, var(--brand-300), var(--accent))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Team Today</span>
+          </h1>
+          <p className="fade-up" style={{ animationDelay: ".3s", fontSize: "clamp(16px, 2vw, 20px)", color: "rgba(255,255,255,.65)", maxWidth: 580, margin: "0 auto 40px", lineHeight: 1.6 }}>
+            Connect with vetted freelancers, bid on projects, and assemble powerful teams. From solo gigs to enterprise projects.
+          </p>
+          <div className="fade-up" style={{ animationDelay: ".4s", display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
+            <button onClick={() => onNavigate("register")} style={{ ...btnStyle, background: "white", color: "var(--brand-700)", padding: "14px 32px", fontSize: 16, boxShadow: "0 4px 14px rgba(0,0,0,.15)", borderRadius: var_radius_lg }}>
+              Start Freelancing <Icons.ArrowRight />
+            </button>
+            <button onClick={() => onNavigate("jobs")} style={{ ...btnStyle, background: "rgba(255,255,255,.08)", color: "white", border: "1px solid rgba(255,255,255,.2)", padding: "14px 32px", fontSize: 16, borderRadius: var_radius_lg, backdropFilter: "blur(4px)" }}>
+              Browse Jobs
+            </button>
+          </div>
+
+          {/* Stats */}
+          <div className="fade-up" style={{ animationDelay: ".5s", display: "flex", justifyContent: "center", gap: 48, marginTop: 64, flexWrap: "wrap" }}>
+            {[
+              { value: "2,400+", label: "Freelancers" },
+              { value: "850+", label: "Active Jobs" },
+              { value: "$4.2M", label: "Paid Out" },
+              { value: "4.9/5", label: "Avg Rating" },
+            ].map((s, i) => (
+              <div key={i} style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: "white", fontFamily: "var(--font-mono)", letterSpacing: "-.02em" }}>{s.value}</div>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,.5)", fontWeight: 500, marginTop: 4, textTransform: "uppercase", letterSpacing: ".06em" }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section style={{ padding: "96px 24px", maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 64 }}>
+          <h2 style={{ fontSize: 36, fontWeight: 800, color: "var(--gray-900)", letterSpacing: "-.02em", marginBottom: 12 }}>How It Works</h2>
+          <p style={{ fontSize: 17, color: "var(--gray-500)", maxWidth: 480, margin: "0 auto" }}>Three simple steps to launch your next project</p>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24 }}>
+          {[
+            { icon: <Icons.Briefcase />, num: "01", title: "Post Your Project", desc: "Describe your needs, set budget, define skills required. Solo gigs or team projects." },
+            { icon: <Icons.Users />, num: "02", title: "Get Matched", desc: "Freelancers bid on your project. Review portfolios, ratings, and proposals." },
+            { icon: <Icons.Zap />, num: "03", title: "Build & Ship", desc: "Assemble your team, collaborate, and deliver exceptional results together." },
+          ].map((f, i) => (
+            <div key={i} style={{ ...cardStyle, position: "relative", overflow: "hidden", cursor: "default" }}>
+              <div style={{ position: "absolute", top: 16, right: 20, fontSize: 60, fontWeight: 800, fontFamily: "var(--font-mono)", color: "var(--gray-100)", lineHeight: 1 }}>{f.num}</div>
+              <div style={{ width: 48, height: 48, borderRadius: var_radius_lg, background: "var(--brand-50)", color: "var(--brand-600)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>{f.icon}</div>
+              <h3 style={{ fontSize: 20, fontWeight: 700, color: "var(--gray-900)", marginBottom: 10 }}>{f.title}</h3>
+              <p style={{ fontSize: 15, color: "var(--gray-500)", lineHeight: 1.6 }}>{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section style={{ padding: "80px 24px", background: "linear-gradient(135deg, var(--brand-600), var(--brand-500))", textAlign: "center" }}>
+        <h2 style={{ fontSize: 32, fontWeight: 800, color: "white", marginBottom: 16 }}>Ready to get started?</h2>
+        <p style={{ fontSize: 17, color: "rgba(255,255,255,.8)", marginBottom: 32 }}>Join thousands of professionals on TalentBridge</p>
+        <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
+          <button onClick={() => onNavigate("register")} style={{ ...btnStyle, background: "white", color: "var(--brand-700)", padding: "13px 28px", fontSize: 15, borderRadius: var_radius_lg }}>Create Account</button>
+          <button onClick={() => onNavigate("jobs")} style={{ ...btnStyle, background: "transparent", color: "white", border: "1.5px solid rgba(255,255,255,.4)", padding: "13px 28px", fontSize: 15, borderRadius: var_radius_lg }}>Browse Jobs</button>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <Footer onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+// ============================================================================
+// LOGIN PAGE
+// ============================================================================
+function LoginPage({ onLogin, onNavigate }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "var(--gray-50)" }}>
+      <div className="fade-up" style={{ width: "100%", maxWidth: 420, ...cardStyle, boxShadow: "var(--shadow-xl)", padding: 40 }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ width: 48, height: 48, borderRadius: var_radius_lg, background: "linear-gradient(135deg, var(--brand-600), var(--brand-400))", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 16, fontFamily: "var(--font-mono)", marginBottom: 16 }}>TB</div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--gray-900)", marginBottom: 6 }}>Welcome back</h1>
+          <p style={{ fontSize: 15, color: "var(--gray-500)" }}>Sign in to your account</p>
+        </div>
+
+        <form onSubmit={e => { e.preventDefault(); onLogin(email, password); }} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 6 }}>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" style={inputStyle} required />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 6 }}>Password</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" style={inputStyle} required />
+          </div>
+          <button type="submit" style={{ ...btnStyle, ...btnPrimary, width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 15, borderRadius: var_radius_md, marginTop: 4 }}>Sign In</button>
+        </form>
+
+        <p style={{ textAlign: "center", marginTop: 24, fontSize: 14, color: "var(--gray-500)" }}>
+          Don't have an account? <button onClick={() => onNavigate("register")} style={{ color: "var(--brand-600)", fontWeight: 600, background: "none", border: "none", cursor: "pointer", fontSize: 14, fontFamily: "var(--font-sans)" }}>Sign up</button>
+        </p>
+        <p style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--gray-400)" }}>
+          Demo: sarah@example.com / Password123
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// REGISTER PAGE
+// ============================================================================
+function RegisterPage({ onRegister, onNavigate }) {
+  const [step, setStep] = useState(1);
+  const [data, setData] = useState({ email: "", password: "", name: "", role: "freelancer", title: "", location: "", hourlyRate: 50, skills: [], bio: "", company: "" });
+  const [skillInput, setSkillInput] = useState("");
+
+  const addSkill = () => {
+    if (skillInput.trim() && !data.skills.includes(skillInput.trim())) {
+      setData(d => ({ ...d, skills: [...d.skills, skillInput.trim()] }));
+      setSkillInput("");
+    }
+  };
+
+  const removeSkill = (s) => setData(d => ({ ...d, skills: d.skills.filter(sk => sk !== s) }));
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "var(--gray-50)" }}>
+      <div className="fade-up" style={{ width: "100%", maxWidth: 480, ...cardStyle, boxShadow: "var(--shadow-xl)", padding: 40 }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ width: 48, height: 48, borderRadius: var_radius_lg, background: "linear-gradient(135deg, var(--brand-600), var(--brand-400))", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 16, fontFamily: "var(--font-mono)", marginBottom: 16 }}>TB</div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--gray-900)", marginBottom: 6 }}>Create Account</h1>
+          <p style={{ fontSize: 15, color: "var(--gray-500)" }}>Step {step} of {data.role === "freelancer" ? 2 : 1}</p>
+        </div>
+
+        {step === 1 && (
+          <form onSubmit={e => {
+            e.preventDefault();
+            if (data.role === "client") { onRegister(data); } else { setStep(2); }
+          }} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <label style={labelStyle}>Full Name</label>
+              <input value={data.name} onChange={e => setData(d => ({ ...d, name: e.target.value }))} placeholder="John Doe" style={inputStyle} required />
+            </div>
+            <div>
+              <label style={labelStyle}>Email</label>
+              <input type="email" value={data.email} onChange={e => setData(d => ({ ...d, email: e.target.value }))} placeholder="you@example.com" style={inputStyle} required />
+            </div>
+            <div>
+              <label style={labelStyle}>Password</label>
+              <input type="password" value={data.password} onChange={e => setData(d => ({ ...d, password: e.target.value }))} placeholder="Min 8 chars, uppercase + number" style={inputStyle} required minLength={8} />
+            </div>
+            <div>
+              <label style={labelStyle}>I want to</label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[["freelancer", "Work as Freelancer", "💼"], ["client", "Hire Talent", "🏢"]].map(([val, label, emoji]) => (
+                  <button key={val} type="button" onClick={() => setData(d => ({ ...d, role: val }))} style={{
+                    padding: "16px 12px", borderRadius: var_radius_lg, cursor: "pointer", textAlign: "center",
+                    border: data.role === val ? "2px solid var(--brand-500)" : "2px solid var(--gray-200)",
+                    background: data.role === val ? "var(--brand-50)" : "white", fontFamily: "var(--font-sans)"
+                  }}>
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>{emoji}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: data.role === val ? "var(--brand-700)" : "var(--gray-700)" }}>{label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {data.role === "client" && (
+              <div>
+                <label style={labelStyle}>Company Name</label>
+                <input value={data.company} onChange={e => setData(d => ({ ...d, company: e.target.value }))} placeholder="Your company" style={inputStyle} />
+              </div>
+            )}
+            <button type="submit" style={{ ...btnStyle, ...btnPrimary, width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 15, marginTop: 4 }}>
+              {data.role === "client" ? "Create Account" : "Next: Your Profile"} <Icons.ArrowRight />
+            </button>
+          </form>
+        )}
+
+        {step === 2 && (
+          <form onSubmit={e => { e.preventDefault(); onRegister(data); }} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <label style={labelStyle}>Professional Title</label>
+              <input value={data.title} onChange={e => setData(d => ({ ...d, title: e.target.value }))} placeholder="e.g. Full Stack Developer" style={inputStyle} required />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <label style={labelStyle}>Location</label>
+                <input value={data.location} onChange={e => setData(d => ({ ...d, location: e.target.value }))} placeholder="City, State" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Hourly Rate ($)</label>
+                <input type="number" value={data.hourlyRate} onChange={e => setData(d => ({ ...d, hourlyRate: Number(e.target.value) }))} style={inputStyle} min={5} />
+              </div>
+            </div>
+            <div>
+              <label style={labelStyle}>Skills</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={skillInput} onChange={e => setSkillInput(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addSkill())} placeholder="Type a skill, press Enter" style={{ ...inputStyle, flex: 1 }} list="skills-list" />
+                <datalist id="skills-list">{INITIAL_SKILLS.map(s => <option key={s} value={s} />)}</datalist>
+                <button type="button" onClick={addSkill} style={{ ...btnStyle, ...btnSecondary, padding: "8px 14px" }}><Icons.Plus /></button>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                {data.skills.map(s => (
+                  <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", background: "var(--brand-50)", color: "var(--brand-700)", fontSize: 12, fontWeight: 600, borderRadius: var_radius_full }}>
+                    {s} <button type="button" onClick={() => removeSkill(s)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--brand-400)", fontSize: 14, lineHeight: 1 }}>&times;</button>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={labelStyle}>Bio</label>
+              <textarea value={data.bio} onChange={e => setData(d => ({ ...d, bio: e.target.value }))} placeholder="Tell clients about your experience..." rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button type="button" onClick={() => setStep(1)} style={{ ...btnStyle, ...btnSecondary, flex: 1, justifyContent: "center" }}>Back</button>
+              <button type="submit" style={{ ...btnStyle, ...btnPrimary, flex: 2, justifyContent: "center" }}>Create Account</button>
+            </div>
+          </form>
+        )}
+
+        <p style={{ textAlign: "center", marginTop: 24, fontSize: 14, color: "var(--gray-500)" }}>
+          Already have an account? <button onClick={() => onNavigate("login")} style={{ color: "var(--brand-600)", fontWeight: 600, background: "none", border: "none", cursor: "pointer", fontSize: 14, fontFamily: "var(--font-sans)" }}>Sign in</button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+const labelStyle = { display: "block", fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 6 };
+const var_radius_full = "9999px";
+
+// ============================================================================
+// DASHBOARD PAGE (Freelancer)
+// ============================================================================
+function DashboardPage({ freelancer, jobs, projects, onNavigate }) {
+  if (!freelancer) return <div style={{ padding: 40, textAlign: "center" }}>Loading...</div>;
+  const myBids = jobs.filter(j => j.bids.some(b => b.freelancerId === freelancer.id));
+  const myProjects = projects.filter(p => p.members?.includes(freelancer.id));
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
+      {/* Header card */}
+      <div className="fade-up" style={{ ...cardStyle, background: "linear-gradient(135deg, var(--brand-600), var(--brand-500))", marginBottom: 24, padding: 32, position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: -40, right: -40, width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,.08)" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 20, position: "relative" }}>
+          <div style={{ width: 72, height: 72, borderRadius: 18, background: "rgba(255,255,255,.2)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 26, fontWeight: 700 }}>{freelancer.avatar}</div>
+          <div>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: "white", marginBottom: 4 }}>{freelancer.name}</h1>
+            <p style={{ fontSize: 15, color: "rgba(255,255,255,.8)" }}>{freelancer.title}</p>
+            <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
+              <span style={{ fontSize: 13, color: "rgba(255,255,255,.7)", display: "flex", alignItems: "center", gap: 4 }}><Icons.Star /> {freelancer.rating} ({freelancer.reviewCount} reviews)</span>
+              <span style={{ fontSize: 13, color: "rgba(255,255,255,.7)", display: "flex", alignItems: "center", gap: 4 }}><Icons.DollarSign /> ${freelancer.hourlyRate}/hr</span>
+              {freelancer.location && <span style={{ fontSize: 13, color: "rgba(255,255,255,.7)", display: "flex", alignItems: "center", gap: 4 }}><Icons.MapPin /> {freelancer.location}</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 24 }}>
+        {[
+          { label: "Active Bids", value: myBids.length, color: "var(--brand-600)" },
+          { label: "Projects", value: myProjects.length, color: "var(--success)" },
+          { label: "Skills", value: freelancer.skills.length, color: "var(--accent)" },
+        ].map((s, i) => (
+          <div key={i} className="fade-up" style={{ ...cardStyle, animationDelay: `${i * .1}s` }}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: s.color, fontFamily: "var(--font-mono)" }}>{s.value}</div>
+            <div style={{ fontSize: 13, color: "var(--gray-500)", fontWeight: 500, marginTop: 4 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Skills */}
+      <div style={{ ...cardStyle, marginBottom: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--gray-900)", marginBottom: 12 }}>Your Skills</h3>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {freelancer.skills.map(s => (
+            <span key={s} style={{ padding: "6px 14px", background: "var(--gray-100)", color: "var(--gray-700)", fontSize: 13, fontWeight: 500, borderRadius: var_radius_full }}>{s}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent bids */}
+      <div style={{ ...cardStyle }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--gray-900)" }}>Your Bids</h3>
+          <button onClick={() => onNavigate("jobs")} style={{ ...btnStyle, ...btnSecondary, padding: "6px 14px", fontSize: 13 }}>Find Jobs</button>
+        </div>
+        {myBids.length === 0 ? (
+          <p style={{ fontSize: 14, color: "var(--gray-400)", textAlign: "center", padding: 24 }}>No bids yet. Browse jobs to get started!</p>
+        ) : (
+          myBids.map(j => (
+            <div key={j.id} style={{ padding: "12px 0", borderBottom: "1px solid var(--gray-100)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-900)" }}>{j.title}</div>
+                <div style={{ fontSize: 12, color: "var(--gray-500)" }}>{j.clientName}</div>
+              </div>
+              <span style={{ padding: "4px 10px", borderRadius: var_radius_full, fontSize: 11, fontWeight: 600, background: "var(--brand-50)", color: "var(--brand-600)" }}>Bid Sent</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// FREELANCERS PAGE
+// ============================================================================
+function FreelancersPage({ freelancers, onNavigate }) {
+  const [search, setSearch] = useState("");
+  const filtered = freelancers.filter(f =>
+    f.name.toLowerCase().includes(search.toLowerCase()) ||
+    f.title.toLowerCase().includes(search.toLowerCase()) ||
+    f.skills.some(s => s.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: 32, fontWeight: 800, color: "var(--gray-900)", letterSpacing: "-.02em", marginBottom: 8 }}>Find Talent</h1>
+        <p style={{ fontSize: 15, color: "var(--gray-500)" }}>Discover skilled professionals for your projects</p>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginBottom: 28 }}>
+        <div style={{ flex: 1, position: "relative" }}>
+          <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--gray-400)" }}><Icons.Search /></div>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, skill, or keyword..." style={{ ...inputStyle, paddingLeft: 42 }} />
+        </div>
+      </div>
+
+      <p style={{ fontSize: 14, color: "var(--gray-400)", marginBottom: 16 }}>Showing {filtered.length} freelancer{filtered.length !== 1 && "s"}</p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 20 }}>
+        {filtered.map((f, i) => (
+          <div key={f.id} className="fade-up" style={{ ...cardStyle, animationDelay: `${i * .05}s`, cursor: "default" }}>
+            <div style={{ display: "flex", alignItems: "start", gap: 14, marginBottom: 14 }}>
+              <div style={{ width: 50, height: 50, borderRadius: 14, background: "linear-gradient(135deg, var(--brand-500), var(--accent))", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 15, flexShrink: 0 }}>{f.avatar}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: "var(--gray-900)" }}>{f.name}</span>
+                  <span style={{ padding: "2px 8px", borderRadius: var_radius_full, fontSize: 11, fontWeight: 600, background: f.status === "available" ? "var(--success-light)" : "var(--warning-light)", color: f.status === "available" ? "var(--success)" : "var(--warning)" }}>{f.status}</span>
+                </div>
+                <p style={{ fontSize: 13, color: "var(--gray-500)" }}>{f.title}</p>
+              </div>
+            </div>
+            <p style={{ fontSize: 13, color: "var(--gray-500)", lineHeight: 1.6, marginBottom: 14, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{f.bio}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, fontSize: 13 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--warning)" }}><Icons.Star /> {f.rating} <span style={{ color: "var(--gray-400)" }}>({f.reviewCount})</span></span>
+              <span style={{ fontWeight: 600, color: "var(--gray-800)" }}>${f.hourlyRate}/hr</span>
+              {f.location && <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--gray-400)" }}><Icons.MapPin /> {f.location}</span>}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {f.skills.slice(0, 4).map(s => (
+                <span key={s} style={{ padding: "3px 10px", background: "var(--gray-100)", color: "var(--gray-600)", fontSize: 11, fontWeight: 600, borderRadius: var_radius_full }}>{s}</span>
+              ))}
+              {f.skills.length > 4 && <span style={{ padding: "3px 10px", background: "var(--brand-50)", color: "var(--brand-600)", fontSize: 11, fontWeight: 600, borderRadius: var_radius_full }}>+{f.skills.length - 4}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// JOBS PAGE with BIDDING
+// ============================================================================
+function JobsPage({ jobs, currentUser, onBid, onNavigate, freelancers }) {
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("all");
+  const [bidJobId, setBidJobId] = useState(null);
+  const [bidAmount, setBidAmount] = useState("");
+  const [bidMessage, setBidMessage] = useState("");
+
+  const filtered = jobs.filter(j => {
+    const matchSearch = j.title.toLowerCase().includes(search.toLowerCase()) || j.skills.some(s => s.toLowerCase().includes(search.toLowerCase()));
+    const matchCategory = category === "all" || j.category === category;
+    return matchSearch && matchCategory && j.status === "open";
+  });
+
+  const submitBid = (jobId) => {
+    if (!currentUser) { onNavigate("login"); return; }
+    if (!bidAmount) return;
+    onBid(jobId, { amount: Number(bidAmount), message: bidMessage, timeline: "As specified" });
+    setBidJobId(null);
+    setBidAmount("");
+    setBidMessage("");
+  };
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 32, flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 32, fontWeight: 800, color: "var(--gray-900)", letterSpacing: "-.02em", marginBottom: 8 }}>Browse Jobs</h1>
+          <p style={{ fontSize: 15, color: "var(--gray-500)" }}>Find your next opportunity</p>
+        </div>
+        {currentUser?.role === "client" && (
+          <button onClick={() => onNavigate("post-job")} style={{ ...btnStyle, ...btnPrimary }}><Icons.Plus /> Post a Job</button>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 240, position: "relative" }}>
+          <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--gray-400)" }}><Icons.Search /></div>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search jobs..." style={{ ...inputStyle, paddingLeft: 42 }} />
+        </div>
+        <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...inputStyle, width: "auto", minWidth: 160, cursor: "pointer" }}>
+          <option value="all">All Categories</option>
+          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      <p style={{ fontSize: 14, color: "var(--gray-400)", marginBottom: 16 }}>Showing {filtered.length} open job{filtered.length !== 1 && "s"}</p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {filtered.map((j, i) => {
+          const hasBid = currentUser && j.bids.some(b => b.freelancerId === currentUser.id);
+          return (
+            <div key={j.id} className="fade-up" style={{ ...cardStyle, animationDelay: `${i * .05}s` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--gray-900)" }}>{j.title}</h3>
+                    {j.teamSize > 1 && <span style={{ padding: "3px 10px", borderRadius: var_radius_full, fontSize: 11, fontWeight: 600, background: "var(--accent-light)", color: "var(--accent)", display: "inline-flex", alignItems: "center", gap: 4 }}><Icons.Users /> Team of {j.teamSize}</span>}
+                  </div>
+                  <p style={{ fontSize: 13, color: "var(--gray-500)" }}>{j.clientName}</p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "var(--brand-600)", fontFamily: "var(--font-mono)" }}>
+                    ${j.budgetMin?.toLocaleString()} - ${j.budgetMax?.toLocaleString()}
+                    {j.budgetType === "hourly" && <span style={{ fontSize: 12, fontWeight: 500 }}>/hr</span>}
+                  </div>
+                  <span style={{ fontSize: 11, color: "var(--gray-400)", textTransform: "uppercase", letterSpacing: ".04em" }}>{j.category}</span>
+                </div>
+              </div>
+
+              <p style={{ fontSize: 14, color: "var(--gray-600)", lineHeight: 1.6, marginBottom: 14 }}>{j.description}</p>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                {j.skills.map(s => <span key={s} style={{ padding: "3px 10px", background: "var(--gray-100)", color: "var(--gray-600)", fontSize: 11, fontWeight: 600, borderRadius: var_radius_full }}>{s}</span>)}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                <div style={{ display: "flex", gap: 16, fontSize: 13, color: "var(--gray-400)" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Icons.MapPin /> {j.location}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Icons.Users /> {j.bids.length} bid{j.bids.length !== 1 && "s"}</span>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {currentUser?.role === "freelancer" && !hasBid && (
+                    <button onClick={() => setBidJobId(bidJobId === j.id ? null : j.id)} style={{ ...btnStyle, ...btnPrimary, padding: "8px 18px", fontSize: 13 }}>
+                      <Icons.Send /> Place Bid
+                    </button>
+                  )}
+                  {hasBid && <span style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "var(--success)", display: "flex", alignItems: "center", gap: 4 }}><Icons.Check /> Bid Submitted</span>}
+                  {currentUser?.role === "client" && j.clientId === currentUser.id && (
+                    <span style={{ fontSize: 13, color: "var(--gray-500)" }}>{j.bids.length} bid{j.bids.length !== 1 && "s"} received</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Bid form */}
+              {bidJobId === j.id && (
+                <div style={{ marginTop: 16, padding: 20, background: "var(--gray-50)", borderRadius: var_radius_lg, border: "1px solid var(--gray-200)" }}>
+                  <h4 style={{ fontSize: 15, fontWeight: 700, color: "var(--gray-900)", marginBottom: 14 }}>Submit Your Bid</h4>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                    <div>
+                      <label style={labelStyle}>Your Bid Amount ($)</label>
+                      <input type="number" value={bidAmount} onChange={e => setBidAmount(e.target.value)} placeholder="e.g. 5000" style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Delivery Timeline</label>
+                      <input placeholder="e.g. 4 weeks" style={inputStyle} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={labelStyle}>Cover Letter</label>
+                    <textarea value={bidMessage} onChange={e => setBidMessage(e.target.value)} placeholder="Why are you the best fit for this job?" rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => submitBid(j.id)} style={{ ...btnStyle, ...btnPrimary, padding: "9px 20px", fontSize: 13 }}>Submit Bid</button>
+                    <button onClick={() => setBidJobId(null)} style={{ ...btnStyle, ...btnSecondary, padding: "9px 20px", fontSize: 13 }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Show bids to client */}
+              {currentUser?.role === "client" && j.clientId === currentUser.id && j.bids.length > 0 && (
+                <div style={{ marginTop: 16, padding: 16, background: "var(--gray-50)", borderRadius: var_radius_lg }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--gray-900)", marginBottom: 10 }}>Bids Received</h4>
+                  {j.bids.map(b => {
+                    const fl = freelancers.find(f => f.id === b.freelancerId);
+                    return (
+                      <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--gray-200)" }}>
+                        <div>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-800)" }}>{b.freelancerName}</span>
+                          {fl && <span style={{ fontSize: 12, color: "var(--gray-400)", marginLeft: 8 }}>⭐ {fl.rating}</span>}
+                        </div>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--brand-600)", fontFamily: "var(--font-mono)" }}>${b.amount?.toLocaleString()}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// POST JOB PAGE
+// ============================================================================
+function PostJobPage({ onPost, onNavigate }) {
+  const [data, setData] = useState({ title: "", description: "", category: "Web Development", skills: [], budgetMin: "", budgetMax: "", budgetType: "fixed", location: "Remote", teamSize: 1, deadline: "" });
+  const [skillInput, setSkillInput] = useState("");
+
+  const addSkill = () => { if (skillInput.trim() && !data.skills.includes(skillInput.trim())) { setData(d => ({ ...d, skills: [...d.skills, skillInput.trim()] })); setSkillInput(""); } };
+
+  return (
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "32px 24px" }}>
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--gray-900)", marginBottom: 8 }}>Post a Job</h1>
+      <p style={{ fontSize: 15, color: "var(--gray-500)", marginBottom: 32 }}>Find the perfect freelancer or build a team</p>
+
+      <form onSubmit={e => { e.preventDefault(); onPost({ ...data, budgetMin: Number(data.budgetMin), budgetMax: Number(data.budgetMax), deadline: data.deadline ? new Date(data.deadline).getTime() : Date.now() + 86400000 * 30 }); }} style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 20 }}>
+        <div>
+          <label style={labelStyle}>Job Title *</label>
+          <input value={data.title} onChange={e => setData(d => ({ ...d, title: e.target.value }))} placeholder="e.g. Full Stack Developer for E-commerce" style={inputStyle} required />
+        </div>
+        <div>
+          <label style={labelStyle}>Description *</label>
+          <textarea value={data.description} onChange={e => setData(d => ({ ...d, description: e.target.value }))} placeholder="Describe the project, requirements, and deliverables..." rows={4} style={{ ...inputStyle, resize: "vertical" }} required />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div>
+            <label style={labelStyle}>Category</label>
+            <select value={data.category} onChange={e => setData(d => ({ ...d, category: e.target.value }))} style={{ ...inputStyle, cursor: "pointer" }}>
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Team Size</label>
+            <select value={data.teamSize} onChange={e => setData(d => ({ ...d, teamSize: Number(e.target.value) }))} style={{ ...inputStyle, cursor: "pointer" }}>
+              {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n === 1 ? "Solo (1 person)" : `Team of ${n}`}</option>)}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style={labelStyle}>Required Skills</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input value={skillInput} onChange={e => setSkillInput(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addSkill())} placeholder="Type a skill, press Enter" style={{ ...inputStyle, flex: 1 }} list="job-skills" />
+            <datalist id="job-skills">{INITIAL_SKILLS.map(s => <option key={s} value={s} />)}</datalist>
+            <button type="button" onClick={addSkill} style={{ ...btnStyle, ...btnSecondary, padding: "8px 14px" }}><Icons.Plus /></button>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+            {data.skills.map(s => (
+              <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", background: "var(--brand-50)", color: "var(--brand-700)", fontSize: 12, fontWeight: 600, borderRadius: var_radius_full }}>
+                {s} <button type="button" onClick={() => setData(d => ({ ...d, skills: d.skills.filter(sk => sk !== s) }))} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--brand-400)", fontSize: 14, lineHeight: 1 }}>&times;</button>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+          <div>
+            <label style={labelStyle}>Min Budget ($)</label>
+            <input type="number" value={data.budgetMin} onChange={e => setData(d => ({ ...d, budgetMin: e.target.value }))} placeholder="1000" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Max Budget ($)</label>
+            <input type="number" value={data.budgetMax} onChange={e => setData(d => ({ ...d, budgetMax: e.target.value }))} placeholder="5000" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Budget Type</label>
+            <select value={data.budgetType} onChange={e => setData(d => ({ ...d, budgetType: e.target.value }))} style={{ ...inputStyle, cursor: "pointer" }}>
+              <option value="fixed">Fixed Price</option>
+              <option value="hourly">Hourly Rate</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div>
+            <label style={labelStyle}>Location</label>
+            <select value={data.location} onChange={e => setData(d => ({ ...d, location: e.target.value }))} style={{ ...inputStyle, cursor: "pointer" }}>
+              <option value="Remote">Remote</option>
+              <option value="On-site">On-site</option>
+              <option value="Hybrid">Hybrid</option>
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Deadline</label>
+            <input type="date" value={data.deadline} onChange={e => setData(d => ({ ...d, deadline: e.target.value }))} style={inputStyle} />
+          </div>
+        </div>
+        <button type="submit" style={{ ...btnStyle, ...btnPrimary, width: "100%", justifyContent: "center", padding: "13px 0", fontSize: 15, marginTop: 4 }}>Post Job</button>
+      </form>
+    </div>
+  );
+}
+
+// ============================================================================
+// PROJECTS PAGE
+// ============================================================================
+function ProjectsPage({ projects, freelancers, currentUser, onCreate, onNavigate }) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [data, setData] = useState({ title: "", description: "", budget: "", category: "Web Development", members: [] });
+
+  const handleCreate = (e) => {
+    e.preventDefault();
+    onCreate({ ...data, budget: Number(data.budget) });
+    setShowCreate(false);
+    setData({ title: "", description: "", budget: "", category: "Web Development", members: [] });
+  };
+
+  const toggleMember = (fId) => {
+    setData(d => ({
+      ...d,
+      members: d.members.includes(fId) ? d.members.filter(m => m !== fId) : d.members.length < 4 ? [...d.members, fId] : d.members
+    }));
+  };
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 32, flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 32, fontWeight: 800, color: "var(--gray-900)", letterSpacing: "-.02em", marginBottom: 8 }}>Projects</h1>
+          <p style={{ fontSize: 15, color: "var(--gray-500)" }}>Manage team projects and collaborations</p>
+        </div>
+        {currentUser?.role === "client" && (
+          <button onClick={() => setShowCreate(!showCreate)} style={{ ...btnStyle, ...btnPrimary }}><Icons.Plus /> New Project</button>
+        )}
+      </div>
+
+      {/* Create project form */}
+      {showCreate && (
+        <div className="fade-up" style={{ ...cardStyle, marginBottom: 24, border: "2px solid var(--brand-200)" }}>
+          <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--gray-900)", marginBottom: 20 }}>Create a Project</h3>
+          <form onSubmit={handleCreate} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14 }}>
+              <div><label style={labelStyle}>Project Title *</label><input value={data.title} onChange={e => setData(d => ({ ...d, title: e.target.value }))} placeholder="e.g. Enterprise Dashboard Rebuild" style={inputStyle} required /></div>
+              <div><label style={labelStyle}>Budget ($)</label><input type="number" value={data.budget} onChange={e => setData(d => ({ ...d, budget: e.target.value }))} placeholder="10000" style={inputStyle} /></div>
+            </div>
+            <div><label style={labelStyle}>Description</label><textarea value={data.description} onChange={e => setData(d => ({ ...d, description: e.target.value }))} placeholder="Describe the project..." rows={3} style={{ ...inputStyle, resize: "vertical" }} /></div>
+            <div>
+              <label style={labelStyle}>Select Team Members (up to 4)</label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 10, marginTop: 8 }}>
+                {freelancers.slice(0, 8).map(f => (
+                  <button key={f.id} type="button" onClick={() => toggleMember(f.id)} style={{
+                    display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: var_radius_lg, cursor: "pointer", textAlign: "left",
+                    border: data.members.includes(f.id) ? "2px solid var(--brand-500)" : "2px solid var(--gray-200)",
+                    background: data.members.includes(f.id) ? "var(--brand-50)" : "white", fontFamily: "var(--font-sans)"
+                  }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, var(--brand-500), var(--accent))", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{f.avatar}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-800)" }}>{f.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--gray-400)" }}>{f.title}</div>
+                    </div>
+                    {data.members.includes(f.id) && <div style={{ color: "var(--brand-600)" }}><Icons.Check /></div>}
+                  </button>
+                ))}
+              </div>
+              <p style={{ fontSize: 12, color: "var(--gray-400)", marginTop: 6 }}>{data.members.length}/4 members selected</p>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button type="submit" style={{ ...btnStyle, ...btnPrimary }}>Create Project</button>
+              <button type="button" onClick={() => setShowCreate(false)} style={{ ...btnStyle, ...btnSecondary }}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Projects list */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 20 }}>
+        {projects.map((p, i) => (
+          <div key={p.id} className="fade-up" style={{ ...cardStyle, animationDelay: `${i * .05}s` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 12 }}>
+              <div>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: "var(--gray-900)", marginBottom: 4 }}>{p.title}</h3>
+                <p style={{ fontSize: 13, color: "var(--gray-500)" }}>{p.clientName}</p>
+              </div>
+              <span style={{ padding: "4px 10px", borderRadius: var_radius_full, fontSize: 11, fontWeight: 600, background: p.status === "active" ? "var(--success-light)" : "var(--gray-100)", color: p.status === "active" ? "var(--success)" : "var(--gray-500)" }}>{p.status}</span>
+            </div>
+            <p style={{ fontSize: 13, color: "var(--gray-500)", lineHeight: 1.6, marginBottom: 16 }}>{p.description}</p>
+            {p.budget && <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand-600)", marginBottom: 14, fontFamily: "var(--font-mono)" }}>${p.budget.toLocaleString()}</div>}
+            <div>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--gray-400)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8, display: "block" }}>Team ({p.members?.length || 0})</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                {p.members?.map(mId => {
+                  const f = freelancers.find(fl => fl.id === mId);
+                  return f ? (
+                    <div key={mId} title={f.name} style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg, var(--brand-500), var(--accent))", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 11, border: "2px solid white" }}>{f.avatar}</div>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {projects.length === 0 && (
+        <div style={{ textAlign: "center", padding: 48, color: "var(--gray-400)" }}>
+          <Icons.Folder />
+          <p style={{ marginTop: 12, fontSize: 15 }}>No projects yet</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// ABOUT PAGE
+// ============================================================================
+function AboutPage({ onNavigate }) {
+  return (
+    <div style={{ maxWidth: 800, margin: "0 auto", padding: "48px 24px" }}>
+      <h1 style={{ fontSize: 36, fontWeight: 800, color: "var(--gray-900)", marginBottom: 16 }}>About TalentBridge</h1>
+      <p style={{ fontSize: 17, color: "var(--gray-500)", lineHeight: 1.7, marginBottom: 32 }}>
+        TalentBridge is a modern freelancing platform connecting talented professionals with clients worldwide. Whether you're a freelancer looking to showcase your expertise or a client seeking the right talent, we make it easy to connect, bid, build teams, and deliver exceptional work.
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, marginBottom: 48 }}>
+        {[
+          { icon: <Icons.Shield />, title: "Secure", desc: "Protected transactions and verified profiles" },
+          { icon: <Icons.Globe />, title: "Global", desc: "Talent from around the world, working remotely" },
+          { icon: <Icons.Zap />, title: "Fast", desc: "Quick matching and efficient collaboration" },
+        ].map((f, i) => (
+          <div key={i} style={{ ...cardStyle }}>
+            <div style={{ color: "var(--brand-600)", marginBottom: 12 }}>{f.icon}</div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--gray-900)", marginBottom: 6 }}>{f.title}</h3>
+            <p style={{ fontSize: 14, color: "var(--gray-500)" }}>{f.desc}</p>
+          </div>
+        ))}
+      </div>
+      <div style={{ textAlign: "center" }}>
+        <button onClick={() => onNavigate("register")} style={{ ...btnStyle, ...btnPrimary, padding: "13px 32px", fontSize: 15 }}>Join TalentBridge</button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// FOOTER
+// ============================================================================
+function Footer({ onNavigate }) {
+  return (
+    <footer style={{ background: "var(--gray-900)", color: "var(--gray-400)", padding: "64px 24px 32px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 40, marginBottom: 40 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: var_radius_lg, background: "linear-gradient(135deg, var(--brand-500), var(--brand-400))", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 13, fontFamily: "var(--font-mono)" }}>TB</div>
+              <span style={{ fontWeight: 700, fontSize: 18, color: "white" }}>TalentBridge</span>
+            </div>
+            <p style={{ fontSize: 14, lineHeight: 1.6, maxWidth: 280 }}>Connecting talented freelancers with opportunities worldwide.</p>
+          </div>
+          {[
+            { title: "Freelancers", links: [["Browse Jobs", "jobs"], ["Create Profile", "register"]] },
+            { title: "Clients", links: [["Find Talent", "freelancers"], ["Post a Job", "post-job"]] },
+            { title: "Company", links: [["About", "about"]] },
+          ].map((col, i) => (
+            <div key={i}>
+              <h4 style={{ fontSize: 12, fontWeight: 700, color: "var(--gray-300)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 16 }}>{col.title}</h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {col.links.map(([label, page]) => (
+                  <button key={label} onClick={() => onNavigate(page)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "var(--gray-400)", textAlign: "left", fontFamily: "var(--font-sans)", padding: 0 }}>{label}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ borderTop: "1px solid var(--gray-800)", paddingTop: 24, textAlign: "center", fontSize: 13 }}>
+          &copy; 2026 TalentBridge. All rights reserved.
+        </div>
+      </div>
+    </footer>
+  );
+}
